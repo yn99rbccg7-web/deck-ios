@@ -125,19 +125,19 @@ final class AgentLoop: ObservableObject {
 
     private func parseAction(from text: String) -> ParsedAction? {
         // Strip Qwen3 thinking traces so reasoning can't trigger phantom tool calls.
-        let noThink = text.replacingOccurrences(of: "<think>.*?</think>", with: "",
-                                                options: [.regularExpression, .dotMatchesLineSeparators])
-        let lines = noThink.components(separatedBy: .newlines)
+        let noThink = text.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "",
+                                                options: [.regularExpression])
+        let lines = noThink.components(separatedBy: CharacterSet.newlines)
         var name: String?
         var argsJSON = ""
         var inArgs = false
         for line in lines {
-            let t = line.trimmingCharacters(in: .whitespaces)
+            let t = line.trimmingCharacters(in: CharacterSet.whitespaces)
             if t.uppercased().hasPrefix("ACTION:") {
-                name = t.dropFirst(7).trimmingCharacters(in: .whitespaces).lowercased()
+                name = t.dropFirst(7).trimmingCharacters(in: CharacterSet.whitespaces).lowercased()
                 inArgs = false
             } else if t.uppercased().hasPrefix("ARGS:") {
-                argsJSON = String(t.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                argsJSON = String(t.dropFirst(5)).trimmingCharacters(in: CharacterSet.whitespaces)
                 inArgs = true
             } else if inArgs {
                 argsJSON += t
@@ -155,13 +155,13 @@ final class AgentLoop: ObservableObject {
 
     private func cleanFinal(_ text: String) -> String {
         // Strip Qwen3 <think> traces and THOUGHT/ACTION scaffolding if leaked.
-        let noThink = text.replacingOccurrences(of: "<think>.*?</think>", with: "",
-                                                options: [.regularExpression, .dotMatchesLineSeparators])
-        let lines = noThink.components(separatedBy: .newlines).filter { line in
-            let t = line.trimmingCharacters(in: .whitespaces).uppercased()
+        let noThink = text.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "",
+                                                options: [.regularExpression])
+        let lines = noThink.components(separatedBy: CharacterSet.newlines).filter { line in
+            let t = line.trimmingCharacters(in: CharacterSet.whitespaces).uppercased()
             return !t.hasPrefix("THOUGHT:") && !t.hasPrefix("ACTION:") && !t.hasPrefix("ARGS:")
         }
-        let cleaned = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleaned = lines.joined(separator: "\n").trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         return cleaned.isEmpty ? text : cleaned
     }
 
