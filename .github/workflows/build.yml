@@ -1,0 +1,46 @@
+name: Build Deck IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "Fastlane lane to run"
+        required: true
+        default: "compilecheck"
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode 16
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Run fastlane lane
+        run: bundle exec fastlane ios ${{ inputs.lane }}
+        env:
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          DEVICE_NAME: ${{ secrets.DEVICE_NAME }}
+          DEVICE_UDID: ${{ secrets.DEVICE_UDID }}
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Deck-ipa
+          path: Deck.ipa
+          if-no-files-found: error
