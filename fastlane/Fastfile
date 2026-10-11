@@ -1,0 +1,62 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Compile only, no signing (validates the project on CI)"
+  lane :compilecheck do
+    xcodebuild(
+      project: "Deck.xcodeproj",
+      scheme: "Deck",
+      configuration: "Release",
+      destination: "generic/platform=iOS",
+      xcargs: "CODE_SIGNING_ALLOWED=NO"
+    )
+  end
+
+  desc "Build an unsigned IPA for SideStore/AltStore (they sign on-device with the user's free Apple ID)"
+  lane :unsigned_ipa do
+    dd = File.expand_path("/tmp/deck-dd")
+    xcodebuild(
+      project: "Deck.xcodeproj",
+      scheme: "Deck",
+      configuration: "Release",
+      destination: "generic/platform=iOS",
+      xcargs: "CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -derivedDataPath '#{dd}'"
+    )
+    app = File.join(dd, "Build/Products/Release-iphoneos/Deck.app")
+    UI.user_error!("Deck.app not found at #{app}") unless File.directory?(app)
+    ipa_root = "/tmp/ipa-root"
+    ipa_path = File.expand_path("../Deck.ipa")
+    sh("rm -rf '#{ipa_root}' && mkdir -p '#{ipa_root}/Payload' && cp -R '#{app}' '#{ipa_root}/Payload/'")
+    sh("cd '#{ipa_root}' && zip -qr '#{ipa_path}' Payload")
+    UI.success("Unsigned IPA ready at #{ipa_path}")
+  end
+
+  desc "Register device, provision, and build a dev-signed IPA for sideloading"
+  lane :sideload do
+    # 1. Make sure the App ID exists (skip iTunes Connect — free accounts).
+    produce(
+      app_identifier: ENV["APP_IDENTIFIER"],
+      app_name: "Deck",
+      skip_itc: true
+    )
+
+    # 2. Register the iPhone so it lands in the provisioning profile.
+    register_devices(
+      devices: { ENV["DEVICE_NAME"] => ENV["DEVICE_UDID"] }
+    )
+
+    # 3. Development certificate + provisioning profile (free Apple ID).
+    cert(development: true)
+    sigh(development: true, force: true)
+
+    # 4. Archive + export a development IPA.
+    gym(
+      project: "Deck.xcodeproj",
+      scheme: "Deck",
+      configuration: "Release",
+      export_method: "development",
+      output_name: "Deck.ipa",
+      output_directory: "."
+    )
+  end
+end
